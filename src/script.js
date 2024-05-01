@@ -13,7 +13,14 @@ import terrainFragmentShader from "./shaders/terrain/fragment.glsl"
  */
 // Debug
 const gui = new GUI({ width: 325 })
-const debugObject = {}
+const debugObject = {
+  colorWaterDeep: "#002b3d",
+  colorWaterSurface: "#66a8ff",
+  colorSand: "#ffe894",
+  colorGrass: "#85d534",
+  colorSnow: "#ffffff",
+  colorRock: "#bfbd8d",
+}
 
 // Canvas
 const canvas = document.querySelector("canvas.webgl")
@@ -37,7 +44,59 @@ rgbeLoader.load("/spruit_sunrise.hdr", (environmentMap) => {
 
 // TERRAIN
 const geometry = new THREE.PlaneGeometry(10, 10, 500, 500)
+geometry.deleteAttribute("uv")
+geometry.deleteAttribute("normal")
 geometry.rotateX(-Math.PI * 0.5)
+
+const uniforms = {
+  uTime: new THREE.Uniform(0),
+  uTimeSpeed: new THREE.Uniform(0.1),
+  uPositionFrequency: new THREE.Uniform(0.2),
+  uStrength: new THREE.Uniform(2.0),
+  uWarpFrequency: new THREE.Uniform(5),
+  uWarpStrength: new THREE.Uniform(0.5),
+  uColorWaterDeep: new THREE.Uniform(
+    new THREE.Color(debugObject.colorWaterDeep)
+  ),
+  uColorWaterSurface: new THREE.Uniform(
+    new THREE.Color(debugObject.colorWaterSurface)
+  ),
+  uColorSand: new THREE.Uniform(new THREE.Color(debugObject.colorSand)),
+  uColorGrass: new THREE.Uniform(new THREE.Color(debugObject.colorGrass)),
+  uColorSnow: new THREE.Uniform(new THREE.Color(debugObject.colorSnow)),
+  uColorRock: new THREE.Uniform(new THREE.Color(debugObject.colorRock)),
+}
+
+gui
+  .add(uniforms.uPositionFrequency, "value", 0, 1, 0.001)
+  .name("uPositionFrequency")
+gui.add(uniforms.uStrength, "value", 0, 10, 0.001).name("uStrength")
+gui.add(uniforms.uWarpFrequency, "value", 0, 10, 0.001).name("uWarpFrequency")
+gui.add(uniforms.uWarpStrength, "value", 0, 1, 0.001).name("uWarpStrength")
+gui.add(uniforms.uTimeSpeed, "value", 0, 1, 0.001).name("uTimeSpeed")
+
+gui
+  .addColor(debugObject, "colorWaterDeep")
+  .onChange(() =>
+    uniforms.uColorWaterDeep.value.set(debugObject.colorWaterDeep)
+  )
+gui
+  .addColor(debugObject, "colorWaterSurface")
+  .onChange(() =>
+    uniforms.uColorWaterSurface.value.set(debugObject.colorWaterSurface)
+  )
+gui
+  .addColor(debugObject, "colorSand")
+  .onChange(() => uniforms.uColorSand.value.set(debugObject.colorSand))
+gui
+  .addColor(debugObject, "colorGrass")
+  .onChange(() => uniforms.uColorGrass.value.set(debugObject.colorGrass))
+gui
+  .addColor(debugObject, "colorSnow")
+  .onChange(() => uniforms.uColorSnow.value.set(debugObject.colorSnow))
+gui
+  .addColor(debugObject, "colorRock")
+  .onChange(() => uniforms.uColorRock.value.set(debugObject.colorRock))
 
 const material = new CustomShaderMaterial({
   // CSM
@@ -45,23 +104,51 @@ const material = new CustomShaderMaterial({
   vertexShader: terrainVertexShader,
   fragmentShader: terrainFragmentShader,
   silent: true,
-
+  uniforms,
   // MeshStandardMaterial
   metalness: 0,
   roughness: 0.5,
   color: "#85d534",
 })
 
+const depthMaterial = new CustomShaderMaterial({
+  // CSM
+  baseMaterial: THREE.MeshDepthMaterial,
+  vertexShader: terrainVertexShader,
+  fragmentShader: terrainFragmentShader,
+  uniforms: uniforms,
+  silent: true,
+
+  // MeshDepthMaterial
+  depthPacking: THREE.RGBADepthPacking,
+})
+
 const terrain = new THREE.Mesh(geometry, material)
+terrain.customDepthMaterial = depthMaterial
 terrain.receiveShadow = true
 terrain.castShadow = true
+terrain.position.y = 0.35
 scene.add(terrain)
+
+/**
+ * Water
+ */
+const water = new THREE.Mesh(
+  new THREE.PlaneGeometry(10, 10, 1, 1),
+  new THREE.MeshPhysicalMaterial({
+    transmission: 1,
+    roughness: 0.3,
+  })
+)
+water.rotation.x = -Math.PI * 0.5
+water.position.y = 0.25
+scene.add(water)
 
 // BOARD
 
 // Brushes
-const boardFill = new Brush(new THREE.BoxGeometry(11, 2, 11))
-const boardHole = new Brush(new THREE.BoxGeometry(10, 2.1, 10))
+const boardFill = new Brush(new THREE.BoxGeometry(11, 3, 11))
+const boardHole = new Brush(new THREE.BoxGeometry(10, 3, 10))
 boardHole.position.y = 0.2
 boardHole.updateMatrixWorld()
 
@@ -156,6 +243,9 @@ const clock = new THREE.Clock()
 
 const tick = () => {
   const elapsedTime = clock.getElapsedTime()
+
+  // Uniforms
+  uniforms.uTime.value = elapsedTime
 
   // Update controls
   controls.update()
